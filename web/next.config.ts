@@ -7,7 +7,7 @@ const csp = [
   // real Chromium render proved hydration is fully blocked without it
   // (28 CSP violations, no client-side rendering). A per-request nonce
   // via middleware would be the stricter alternative; out of scope here.
-  "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+  `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === "production" ? "" : " 'unsafe-eval'"} https://cdn.jsdelivr.net`,
   // jsDelivr again: @monaco-editor/react loads Monaco's editor.main.css
   // from the CDN. Without this the stylesheet is CSP-blocked, Monaco
   // loses all layout CSS, and its hidden input textarea renders as a

@@ -18,11 +18,32 @@ const CACHE_TTL_MS = 60_000;
 
 let cached: { result: FetchLessonsResult; fetchedAt: number } | null = null;
 
-/** True when both Supabase env vars are present (values never logged). */
+const PLACEHOLDER_HOST_RE = /^(your[_-]?project([_-]?ref)?|placeholder|example)\./i;
+const PLACEHOLDER_VALUE_RE = /^(your[_-]|<.*>|placeholder)/i;
+
+export function isValidSupabaseUrl(raw: unknown): raw is string {
+  if (typeof raw !== "string" || !raw.trim()) return false;
+  try {
+    const parsed = new URL(raw.trim());
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false;
+    if (!parsed.hostname || PLACEHOLDER_HOST_RE.test(parsed.hostname)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function isValidSupabaseKey(raw: unknown): raw is string {
+  if (typeof raw !== "string") return false;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 && !PLACEHOLDER_VALUE_RE.test(trimmed);
+}
+
+/** True when both Supabase env vars are present and non-placeholder (values never logged). */
 export function isSupabaseConfigured(): boolean {
-  return Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  return (
+    isValidSupabaseUrl(process.env.NEXT_PUBLIC_SUPABASE_URL) &&
+    isValidSupabaseKey(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
   );
 }
 
@@ -155,8 +176,8 @@ export async function fetchLessons(): Promise<FetchLessonsResult> {
 
   try {
     const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL as string,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string
+      (process.env.NEXT_PUBLIC_SUPABASE_URL as string).trim(),
+      (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string).trim()
     );
 
     const { data, error } = await supabase

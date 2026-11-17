@@ -213,3 +213,40 @@ test("does not fall back when configured and rows are usable", () => {
     false
   );
 });
+
+const PLACEHOLDER_HOST_RE = /^(your[_-]?project([_-]?ref)?|placeholder|example)\./i;
+const PLACEHOLDER_VALUE_RE = /^(your[_-]|<.*>|placeholder)/i;
+
+function isValidSupabaseUrl(raw) {
+  if (typeof raw !== "string" || !raw.trim()) return false;
+  try {
+    const parsed = new URL(raw.trim());
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return false;
+    if (!parsed.hostname || PLACEHOLDER_HOST_RE.test(parsed.hostname)) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function isValidSupabaseKey(raw) {
+  if (typeof raw !== "string") return false;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 && !PLACEHOLDER_VALUE_RE.test(trimmed);
+}
+
+test("rejects placeholder and invalid Supabase URLs and keys", () => {
+  assert.equal(isValidSupabaseUrl("https://your_project_ref.supabase.co"), false);
+  assert.equal(isValidSupabaseUrl("https://your-project.supabase.co"), false);
+  assert.equal(isValidSupabaseUrl("https://example.supabase.co"), false);
+  assert.equal(isValidSupabaseUrl("not-a-url"), false);
+  assert.equal(isValidSupabaseUrl(""), false);
+  assert.equal(isValidSupabaseUrl("https://xyzcompany.supabase.co"), true);
+
+  assert.equal(isValidSupabaseKey("your_anon_key"), false);
+  assert.equal(isValidSupabaseKey("<your-key>"), false);
+  assert.equal(isValidSupabaseKey("placeholder"), false);
+  assert.equal(isValidSupabaseKey(""), false);
+  assert.equal(isValidSupabaseKey("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.real"), true);
+});
+

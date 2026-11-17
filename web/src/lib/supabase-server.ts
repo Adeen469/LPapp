@@ -12,12 +12,13 @@
 // The service-role key must never reach the browser.
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { isValidSupabaseKey, isValidSupabaseUrl } from "./lessons";
 
 export function getSupabaseAdmin(): SupabaseClient | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) return null;
-  return createClient(url, serviceKey, {
+  if (!isValidSupabaseUrl(url) || !isValidSupabaseKey(serviceKey)) return null;
+  return createClient(url.trim(), serviceKey.trim(), {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }
