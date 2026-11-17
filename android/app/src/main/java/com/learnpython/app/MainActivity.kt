@@ -33,12 +33,10 @@ import androidx.browser.customtabs.CustomTabsIntent
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import com.google.android.material.button.MaterialButton
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var swipeRefresh: SwipeRefreshLayout
     private lateinit var webView: WebView
     private lateinit var progressBar: ProgressBar
     private lateinit var errorContainer: LinearLayout
@@ -68,19 +66,11 @@ class MainActivity : AppCompatActivity() {
             isAppearanceLightNavigationBars = false
         }
 
-        swipeRefresh = findViewById(R.id.swipeRefresh)
         webView = findViewById(R.id.webView)
         progressBar = findViewById(R.id.progressBar)
         errorContainer = findViewById(R.id.errorContainer)
         retryButton = findViewById(R.id.retryButton)
         fullscreenContainer = findViewById(R.id.fullscreenContainer)
-
-        swipeRefresh.setColorSchemeColors(Color.WHITE)
-        swipeRefresh.setProgressBackgroundColorSchemeColor(Color.BLACK)
-        swipeRefresh.setOnRefreshListener {
-            webView.settings.cacheMode = resolveCacheMode()
-            webView.reload()
-        }
 
         retryButton.setOnClickListener {
             errorContainer.visibility = View.GONE
@@ -139,10 +129,6 @@ class MainActivity : AppCompatActivity() {
             cacheMode = resolveCacheMode()
         }
 
-        webView.setOnScrollChangeListener { _, _, scrollY, _, _ ->
-            swipeRefresh.isEnabled = scrollY == 0 && customView == null
-        }
-
         webView.setDownloadListener { url, userAgent, contentDisposition, mimetype, _ ->
             if (url.startsWith("blob:") || url.startsWith("data:")) {
                 Toast.makeText(this, getString(R.string.download_unsupported), Toast.LENGTH_SHORT).show()
@@ -188,7 +174,6 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
-                swipeRefresh.isRefreshing = false
                 progressBar.visibility = View.GONE
                 CookieManager.getInstance().flush()
             }
@@ -199,7 +184,6 @@ class MainActivity : AppCompatActivity() {
                 error: WebResourceError?
             ) {
                 if (request?.isForMainFrame == true) {
-                    swipeRefresh.isRefreshing = false
                     progressBar.visibility = View.GONE
                     errorContainer.visibility = View.VISIBLE
                 }
@@ -242,8 +226,6 @@ class MainActivity : AppCompatActivity() {
                 customViewCallback = callback
                 fullscreenContainer.addView(view)
                 fullscreenContainer.visibility = View.VISIBLE
-                swipeRefresh.visibility = View.GONE
-                swipeRefresh.isEnabled = false
                 requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                 WindowInsetsControllerCompat(window, window.decorView).apply {
                     hide(WindowInsetsCompat.Type.systemBars())
@@ -261,8 +243,6 @@ class MainActivity : AppCompatActivity() {
         val view = customView ?: return
         fullscreenContainer.removeView(view)
         fullscreenContainer.visibility = View.GONE
-        swipeRefresh.visibility = View.VISIBLE
-        swipeRefresh.isEnabled = webView.scrollY == 0
         customViewCallback?.onCustomViewHidden()
         customView = null
         customViewCallback = null
