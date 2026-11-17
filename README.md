@@ -1,11 +1,226 @@
-<div align="center">
+# Learn-Python (LP) — Learning Platform
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+Next.js (App Router) video learning app: MEGA + Google Drive video
+streaming with Range support, a 95%-watched rule for completion and
+daily progress (seeking is free, all lessons are open), daily
+goals/streaks, optional per-lesson tests, and Supabase-backed lessons.
 
-  <h1>Built with AI Studio</h2>
+## Quick start (local)
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+```bash
+cd web
+npm install
+npm test        # node --test tests/*.test.mjs
+npm run build
+npm start       # serves on http://localhost:3000
+```
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+Local smoke checks use `npx next start` on port 3000 — never
+`.next/standalone/server.js` on its own. Kill a previous server first:
 
-</div>
+```bash
+lsof -ti:3000 | xargs -r kill
+```
+
+## Lessons: Supabase first, seed fallback
+
+Lessons live in Supabase (`courses` → `modules` → `lessons`). The app
+reads them through `GET /api/lessons` (public, rate-limited 60 req/min
+per IP). If Supabase is not configured, unreachable, or returns no usable
+rows, the server falls back to the hardcoded seed list in
+`web/src/lib/catalog.ts` (and logs one `console.warn` with the reason).
+The homepage renders the seed list instantly, then replaces it with the
+`/api/lessons` result on mount; if that fetch fails the seed list simply
+stays on screen.
+
+### One-time Supabase setup
+
+Run these in the Supabase dashboard SQL editor, in order:
+
+1. `supabase/migrations/001_initial_schema.sql` — tables + RLS.
+2. `supabase/migrations/002_public_lessons.sql` — adds `lessons.slug`,
+   allows the `drive` provider, per-provider `video_url` checks (an
+   empty `video_url` is allowed — the lesson shows as "Coming soon"),
+   an optional `quiz` jsonb column, and anon + authenticated `SELECT`
+   policies for published courses, their modules, and their lessons.
+   Re-runnable (drop-if-exists guards).
+3. `supabase/seed_lessons.sql` — inserts the "Python for Beginners
+   (Full Course)" course, its "100 Days of Code" module, and all 100
+   lessons (Day 1 to Day 100, video URLs empty until the
+   MEGA links are pasted in). Re-runnable (upserts on slug).
+
+### Adding a lesson (no redeploy)
+
+Insert one row into `public.lessons` (Supabase dashboard → Table Editor
+or SQL), with the module's id, a unique `slug` (this becomes the public
+lesson id, e.g. `intro-variables`), `title`, `video_provider`
+(`mega` or `drive`), `video_url`, `duration_seconds`, and
+`notes_markdown`. Rules enforced by the database:
+
+- `mega` rows: `video_url` must be the full MEGA share link (empty
+  `''` is allowed — the lesson shows as "Coming soon" until its link
+  is pasted in).
+- `drive` rows: `video_url` must be just the Drive file ID (10–64 chars,
+  letters/digits/`-`/`_`), and the file must be shared as
+  "Anyone with the link".
+- Only lessons under a published course (`is_published = true`) are
+  readable by anon/authenticated users.
+
+The server caches the lesson list in memory for 60 seconds, so a new or
+edited lesson appears within a minute — no redeploy, no restart.
+
+> Note: no lesson currently has a test — neither the seed catalog in
+> `catalog.ts` nor the Supabase seed inserts quiz questions. The quiz
+> column exists in Supabase (added by 002) and `/api/lessons` serves it
+> when present, so adding a test to a lesson is a data change, not a
+> code change. A lesson without a quiz simply hides its "Take test"
+> button. Tests never gate anything — all lessons are open, and the
+> 95% rule is only for completion and today's progress.
+
+## Environment variables
+
+Set in Fly secrets (production) or a local `.env.local` (never commit
+secrets, never paste them in chat):
+
+| Variable | Required? | Used for |
+| --- | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | Optional | Supabase project URL; without it (and the key below) lessons come from the seed list |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Optional | Supabase anon/public key; read-only lesson queries |
+| `GOOGLE_DRIVE_API_KEY` | Optional | Google Drive streaming; without it Drive lessons return 503 |
+| `GOOGLE_CLIENT_ID` | Required for sign-in | Google OAuth client ID (server-side only) |
+| `GOOGLE_CLIENT_SECRET` | Required for sign-in | Google OAuth client secret (server-side only, never in client code) |
+| `SESSION_SECRET` | Required for sign-in | ≥32 random chars; HMAC key for the session cookie. **Missing/short → all auth endpoints fail closed with 503.** Generate with `openssl rand -hex 32` and add it as a Fly secret (see below). |
+| `GEMINI_API_KEY` | Required for AI | Gemini (first provider). Without it AND `GROQ_API_KEY`, `/api/ai` answers 503 and the AI panels show "AI unavailable". |
+| `GROQ_API_KEY` | Required for AI fallback | Groq (fallback provider, models `openai/gpt-oss-120b` then `openai/gpt-oss-20b`). |
+
+## Authentication (Google sign-in)
+
+Sign-in is Google OAuth (authorization-code flow + PKCE, server-side
+only) with a stateless HMAC-SHA256 session cookie (`lp_session`,
+HttpOnly, Secure on https, SameSite=Lax, 30-day expiry). Guests see
+only the landing page; the course, editor, and GitHub pages call
+`GET /api/auth/me` and redirect to `/` when there is no valid session.
+The Google access token is never stored or sent to the client — only
+the profile (email, name, picture) goes into the session payload.
+
+| Endpoint | Notes |
+| --- | --- |
+| `GET /api/auth/google` | Starts the flow: sets short-lived HttpOnly state + PKCE cookies, redirects to accounts.google.com. Rate-limited 20/min per IP. |
+| `GET /api/auth/callback/google` | Validates `state`, exchanges the code server-side, sets the session cookie, redirects to `/`. Bad/missing state → 400, no session. Rate-limited 20/min per IP. |
+| `GET /api/auth/me` | Returns `{ user: { email, name, picture } }` or 401. Rate-limited 60/min per IP. |
+| `POST /api/auth/logout` | Expires the session cookie. Rate-limited 30/min per IP. |
+
+One-time setup (owner steps):
+
+1. Add `SESSION_SECRET` (≥32 random chars, e.g. `openssl rand -hex 32`)
+   as a Fly secret for `learnpython`, then redeploy.
+2. In the Google Cloud OAuth client, the authorized redirect URI must
+   be `https://learnpython.fly.dev/api/auth/callback/google`
+   (already added). For local dev, add
+   `http://localhost:3000/api/auth/callback/google` — the older localhost
+   entry used the path `/auth/callback`, which this app does not serve.
+
+## AI (Gemini first, Groq fallback)
+
+The AI tutor in the course and the "Explain this code" / "Find the bug"
+buttons in the editor both call `POST /api/ai`. Provider order is
+Gemini first (`gemini-3.8-flash`, 7s timeout), Groq as fallback
+(`openai/gpt-oss-120b`, then `openai/gpt-oss-20b` on a 404 only) — the
+same order and model names as the Locora chatbot, verified working
+there. The route is session-required (401 when logged out) and
+rate-limited 20/min per IP. The request carries only the lesson
+context and the learner's own question/code — never any user profile
+data. No chat history is stored server-side (the client sends at most
+the last 8 turns). Replies never contain emojis (house rule), and the
+tutor answers in Hinglish in Roman script when the learner asks in
+Hinglish — never in Devanagari script. The `quiz` mode drafts 3 quiz
+questions for a lesson and returns them in the response only — they are
+never stored or auto-published; the owner reviews them and adds them to
+`catalog.ts` by hand.
+
+**Video transcript grounding (tutor + quiz modes).** The tutor answers
+from what the lesson video actually says, not just its title: for
+`tutor` and `quiz` the server fetches the video's transcript live per
+question (YouTube Innertube player API with an ANDROID client —
+plain timedtext requests and yt-dlp get 429/bot-checks from datacenter
+IPs — no API key, no yt-dlp, plain fetch only). Track preference:
+`hi-Latn` (Hinglish already), then Hindi auto-captions `hi`, then
+`hi-orig`, then manual `en-IN` subtitles, then any English auto
+track. The transcript is converted to Roman Hinglish before it
+reaches the model: a `hi-Latn` track passes through, while Devanagari
+captions are transliterated dependency-free in `lib/transcript.ts`
+(if transliteration ever yields nothing, the Devanagari text is kept —
+the model reads it fine). Transcripts are capped at 12,000 characters
+(marked as an excerpt when cut) and cached per video for 1h (max 20
+entries), so a second question about the same lesson does not re-fetch
+YouTube. If YouTube is unreachable (6s timeout) or a video has no
+captions, the tutor falls back to title+notes grounding and answers
+normally — it never fails just because the transcript did. Explain and
+debug modes do not fetch a transcript (they are about the learner's
+own code).
+
+Completion is stage-by-stage: a roadmap stage is "Complete" only when
+ALL its lessons are 95% watched; the roadmap highlights the first
+incomplete stage as the current one. There is no single "course
+complete" gate — the course is finished one stage at a time. Extras
+never count toward stage completion.
+
+## API endpoints
+
+| Endpoint | Notes |
+| --- | --- |
+| `POST /api/ai` | `{ reply, provider, quiz? }`. Modes: `tutor` \| `explain` \| `debug` \| `quiz`. Session-required (401); rate-limited 20/min per IP; 503 when no AI keys are configured or both providers fail. |
+| `GET /api/lessons` | `{ lessons, source: "supabase" \| "seed" }`. Rate-limited 60/min per IP. Public. |
+| `GET /api/health` | `{ status: "ok", supabase: "configured" \| "not_configured", lessons: "supabase" \| "seed", uptime_seconds }`. Uses the cached lesson fetch — no fresh DB ping per call. Not rate-limited (Fly probes it every 30s). |
+| `GET /api/video/[lessonId]` | Range-capable video stream (MEGA or Drive). Rate-limited 120/min per IP. Errors are logged as one structured JSON line `{ lessonId, source, code, status }` plus the original error. |
+| `GET /api/pypi?name=<pkg>` | PyPI package info. Rate-limited 60/min per IP. |
+| `GET /api/github/...` | GitHub repo/commit helpers. Rate-limited 30/min per IP. |
+
+No auth is required for the video API or `/api/lessons` — lessons are
+public by design.
+
+## Health check (Fly.io)
+
+`fly.toml` wires `[[http_service.checks]]` to `GET /api/health`
+(grace 10s, every 30s, 5s timeout). A failing check takes the machine out
+of routing; it never restarts the machine. Check status with
+`fly checks list`.
+
+## Cold starts
+
+`fly.toml` currently sets `min_machines_running = 0` with
+`auto_stop_machines = true`: when the app has no traffic for about
+5 minutes, Fly stops the machine (this is the behaviour on the free
+trial with no card added). The next request then waits for a cold start
+of roughly 4 seconds while the machine boots.
+
+To remove the cold start, set `min_machines_running = 1` in `fly.toml`
+(and redeploy): one machine stays warm at all times, so the first
+request after idle time answers immediately. The trade-off is that the
+always-on machine accrues uptime continuously, so only do this once
+you are on a plan / payment method that covers it — on the no-card
+trial, keeping a machine warm is not free. This setting is
+deliberately left at `0` for now.
+
+## Deployment
+
+Push to `main`; the `.github/workflows/fly.yml` workflow deploys
+automatically (takes ~3–5 min). After a deploy, verify live: home page
+200, `/api/lessons` 200, `/api/health` 200, and a video Range request
+206.
+
+## Security notes
+
+- Content-Security-Policy + HSTS are set in `web/next.config.ts`.
+  `script-src` keeps `'unsafe-inline'` on purpose: Next.js App Router
+  streams its RSC payload as inline scripts, and a real Chromium render
+  proved hydration is fully blocked without it.
+- Rate limits are in-memory per IP (single Fly machine, no shared
+  store needed): video 120/min, lessons 60/min, PyPI 60/min, GitHub
+  30/min.
+- Per-IP video concurrency guard: deliberately **not** implemented.
+  The only correct form (wrapping the proxied `ReadableStream` to
+  release the slot on close/cancel) risks breaking Range playback, and
+  the cheap form (counting handler invocations) would 429 legitimate
+  seeks, since every seek opens a new stream. The 120/min per-IP rate
+  limit already bounds abuse.

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Learn Python</string>
+    <string name="offline_title">Unable to connect</string>
+    <string name="offline_subtitle">Check your internet connection or tap retry to reload Learn Python.</string>
+    <string name="retry">Retry</string>
+    <string name="download_started">Downloading %1$s</string>
+    <string name="download_unsupported">In-app blob downloads are saved using the web player.</string>
+</resources>

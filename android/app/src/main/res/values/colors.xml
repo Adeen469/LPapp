@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="lp_black">#000000</color>
+    <color name="lp_surface">#0A0A0A</color>
+    <color name="lp_border">#262626</color>
+    <color name="lp_white">#FFFFFF</color>
+    <color name="lp_muted">#A3A3A3</color>
+    <color name="ic_launcher_background">#000000</color>
+</resources>
