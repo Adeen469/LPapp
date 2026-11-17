@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
-const SITE_URL = "https://learnpython.fly.dev";
+const SITE_URL = "https://learnpythonprogram.vercel.app";
 const DESCRIPTION =
   "Learn Python free — 100+ video lessons from CodeWithHarry's Python for Beginners full course in Hindi, with offline video, daily goals and streaks.";
 

@@ -3,7 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-val lpAppUrl = providers.gradleProperty("LP_APP_URL").orElse("https://learnpython.fly.dev").get()
+val lpAppUrl = providers.gradleProperty("LP_APP_URL").orElse("https://learnpythonprogram.vercel.app").get()
 
 android {
     namespace = "com.learnpython.app"

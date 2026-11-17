@@ -4,7 +4,7 @@ Native Android wrapper (`com.learnpython.app`) for the existing Learn-Python Nex
 
 ## What is included
 
-- **Full UI, Backend & DB preservation**: Loads the live Learn-Python app (`https://learnpython.fly.dev` by default, configurable via `LP_APP_URL`).
+- **Full UI, Backend & DB preservation**: Loads the live Learn-Python app (`https://learnpythonprogram.vercel.app` by default, configurable via `LP_APP_URL`).
 - **Dark monochrome shell**: Pure black status bar, navigation bar, and window theme matching `web/src/app/globals.css`.
 - **Video & Interactive support**: JavaScript, DOM Storage (`localStorage`), IndexedDB, WebAssembly (for Pyodide), Cache Storage (for offline videos/tutorials), and fullscreen landscape video (`onShowCustomView`).
 - **Native ergonomics**: Pull-to-refresh at scroll top, hardware back-button history navigation, file chooser support, offline retry screen, and Chrome Custom Tabs for external links.

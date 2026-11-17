@@ -4,13 +4,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class AppConfigTest {
-    private val prodUrl = "https://learnpython.fly.dev"
+    private val prodUrl = "https://learnpythonprogram.vercel.app"
 
     @Test
     fun sameHostLoadsInWebView() {
         assertEquals(
             UrlAction.LOAD_IN_WEBVIEW,
-            AppConfig.classifyUrl("https://learnpython.fly.dev/learn/python-home", prodUrl)
+            AppConfig.classifyUrl("https://learnpythonprogram.vercel.app/learn/python-home", prodUrl)
         )
     }
 
