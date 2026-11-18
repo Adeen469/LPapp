@@ -25,6 +25,15 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Google sign-in return: after the OAuth callback, the
+                 server redirects to learnpython://auth?code=... and
+                 Android brings the app back to handle it. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="learnpython" android:host="auth" />
+            </intent-filter>
         </activity>
     </application>
 

@@ -101,9 +101,31 @@ class MainActivity : AppCompatActivity() {
 
         if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState)
-        } else {
+        } else if (!handleAuthDeepLink(intent)) {
             webView.loadUrl(BuildConfig.APP_URL)
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleAuthDeepLink(intent)
+    }
+
+    /**
+     * Google sign-in return: learnpython://auth?code=<exchange-code>.
+     * The code is swapped for a session inside THIS WebView by loading
+     * /api/auth/app-exchange, which sets the session cookie here and
+     * redirects home. Returns true when the intent was a sign-in deep
+     * link, so the caller skips the normal start URL.
+     */
+    private fun handleAuthDeepLink(intent: Intent?): Boolean {
+        val data = intent?.data ?: return false
+        if (data.scheme != "learnpython" || data.host != "auth") return false
+        val code = data.getQueryParameter("code") ?: return false
+        val base = BuildConfig.APP_URL.trimEnd('/')
+        webView.loadUrl("$base/api/auth/app-exchange?code=${Uri.encode(code)}")
+        return true
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -113,6 +135,13 @@ class MainActivity : AppCompatActivity() {
         cookieManager.setAcceptThirdPartyCookies(webView, true)
 
         webView.setBackgroundColor(Color.BLACK)
+        // Identify this WebView to the server so /api/auth/google knows
+        // the sign-in started in the app (the callback then returns via
+        // the learnpython://auth deep link instead of a cookie). The
+        // marker is appended, not a replacement — the WebView still
+        // identifies as a WebView.
+        webView.settings.userAgentString =
+            WebSettings.getDefaultUserAgent(this) + " LearnPythonApp/1.0"
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
